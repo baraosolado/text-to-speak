@@ -1,23 +1,21 @@
-# Usa uma imagem leve do Python
+# Usa a imagem oficial do Python (mantive a 3.10 que você já usava)
 FROM python:3.10-slim
 
-# Define a pasta de trabalho dentro do container
+# Define a pasta de trabalho
 WORKDIR /app
 
-# Instala as dependências do sistema (FFMPEG é vital para converter para OGG)
-RUN apt-get update && apt-get install -y \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+# 1. Instala o FFMPEG no sistema (Isso é o que faltava para o áudio virar OGG)
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
-# Copia todos os arquivos do GitHub para dentro do container
+# 2. Copia todos os seus arquivos do GitHub (main.py, etc) para dentro do Docker
 COPY . .
 
-# Instala todas as bibliotecas listadas no seu requirements.txt
-# Isso inclui o pydub, flask e edge-tts automaticamente
-RUN pip install --no-cache-dir -r requirements.txt
+# 3. Força a instalação de TODAS as bibliotecas necessárias
+# Flask (para a API), Edge-TTS (para a voz da Thalita) e Pydub (para a conversão)
+RUN pip install --no-cache-dir flask edge-tts pydub
 
-# Expõe a porta que a API vai usar
+# 4. Abre a porta que você já usa
 EXPOSE 5000
 
-# Comando para iniciar a API
+# 5. Comando para ligar a sua API
 CMD ["python", "main.py"]
