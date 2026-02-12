@@ -3,38 +3,39 @@ import asyncio
 import edge_tts
 import os
 from pydub import AudioSegment
+import html
 
 app = Flask(__name__)
 
-async def generate_voice(text, output_path, rate, pitch, voice="pt-BR-FranciscaNeural"):
+async def generate_voice(text, output_path, rate, pitch, voice="pt-BR-ThalitaNeural"):
     r = f"{rate}%" if rate.startswith(('+', '-')) else f"+{rate}%"
     p = f"{pitch}Hz" if pitch.startswith(('+', '-')) else f"+{pitch}Hz"
     
-    # Processamento para voz mais humana
-    processed_text = text
-    processed_text = processed_text.replace("...", "<break time='800ms'/>")
-    processed_text = processed_text.replace("..", "<break time='500ms'/>")
-    processed_text = processed_text.replace(", ", ",<break time='200ms'/> ")
-    processed_text = processed_text.replace(": ", ":<break time='300ms'/> ")
-    processed_text = processed_text.replace("; ", ";<break time='300ms'/> ")
-    processed_text = processed_text.replace("? ", "?<break time='600ms'/> ")
-    processed_text = processed_text.replace("! ", "!<break time='600ms'/> ")
-    processed_text = processed_text.replace(". ", ".<break time='400ms'/> ")
+    # 🔥 LIMPA O TEXTO DE QUALQUER HTML/XML
+    clean_text = html.unescape(text)  # Remove &lt; &gt; etc
+    clean_text = clean_text.replace("<", "").replace(">", "")  # Remove < >
+    clean_text = clean_text.replace("&", "e")  # Substitui & por "e"
     
-    # SSML para controle total
-    ssml_text = f"""
-    <speak version='1.0' xml:lang='pt-BR'>
-        <voice name='{voice}'>
-            <prosody rate='{r}' pitch='{p}'>
-                {processed_text}
-            </prosody>
-        </voice>
-    </speak>
-    """
+    # Processamento para voz mais humana (SEM SSML, direto no texto)
+    processed_text = clean_text
+    processed_text = processed_text.replace("...", " . . . ")   # Pausa longa
+    processed_text = processed_text.replace("..", " . . ")      # Pausa média
+    processed_text = processed_text.replace(", ", ", . ")       # Pausa após vírgula
+    processed_text = processed_text.replace(": ", ": . ")       # Pausa após dois pontos
+    processed_text = processed_text.replace("; ", "; . ")
+    processed_text = processed_text.replace("? ", "? . . ")     # Pausa após pergunta
+    processed_text = processed_text.replace("! ", "! . . ")     # Pausa após exclamação
+    processed_text = processed_text.replace(". ", ". . ")       # Pausa entre frases
     
     temp_mp3 = "temp_audio.mp3"
     
-    communicate = edge_tts.Communicate(ssml_text, voice)
+    # ✅ USAR EDGE-TTS SEM SSML (modo simples e seguro)
+    communicate = edge_tts.Communicate(
+        processed_text, 
+        voice,
+        rate=r,
+        pitch=p
+    )
     await communicate.save(temp_mp3)
     
     # Converte para OGG
@@ -47,9 +48,9 @@ async def generate_voice(text, output_path, rate, pitch, voice="pt-BR-FranciscaN
 @app.route("/falar")
 def falar():
     texto = request.args.get("texto", "")
-    velocidade = request.args.get("vel", "-5")  # Padrão mais lento
-    tom = request.args.get("tom", "2")          # Padrão levemente mais agudo
-    voz = request.args.get("voz", "pt-BR-FranciscaNeural")  # Permite escolher voz
+    velocidade = request.args.get("vel", "-8")
+    tom = request.args.get("tom", "3")
+    voz = request.args.get("voz", "pt-BR-ThalitaNeural")
     
     if not texto: 
         return "Erro: Texto não fornecido", 400
