@@ -2,29 +2,30 @@ from flask import Flask, request, send_file
 import asyncio
 import edge_tts
 import os
+from pydub import AudioSegment
 
 app = Flask(__name__)
 
 async def generate_voice(text, output_path, rate, pitch):
-    # Formatação de velocidade e tom
-    rate_str = f"{rate}%" if rate.startswith(('+', '-')) else f"+{rate}%"
-    pitch_str = f"{pitch}Hz" if pitch.startswith(('+', '-')) else f"+{pitch}Hz"
+    r = f"{rate}%" if rate.startswith(('+', '-')) else f"+{rate}%"
+    p = f"{pitch}Hz" if pitch.startswith(('+', '-')) else f"+{pitch}Hz"
     
-    # Substitui os pontos por silêncio REAL
-    # Usamos o formato simplificado que o edge-tts converte melhor
-    processed_text = text.replace("...", " . ")
-    processed_text = processed_text.replace("..", " . ")
-
-    # Criamos o objeto de comunicação direto
-    # Se o SSML está lendo o código, vamos usar o Communicate direto com os ajustes
-    communicate = edge_tts.Communicate(
-        text=text, 
-        voice="pt-BR-ThalitaNeural",
-        rate=rate_str,
-        pitch=pitch_str
-    )
+    # Substituições de pausas humanas
+    processed_text = text.replace("...", " . ").replace("..", " . ")
     
-    await communicate.save(output_path)
+    temp_mp3 = "temp_audio.mp3"
+    
+    # 1. Gera em MP3 primeiro (padrão do edge-tts)
+    communicate = edge_tts.Communicate(processed_text, "pt-BR-ThalitaNeural", rate=r, pitch=p)
+    await communicate.save(temp_mp3)
+    
+    # 2. Converte MP3 para OGG (Formato que o WhatsApp ama)
+    audio = AudioSegment.from_mp3(temp_mp3)
+    audio.export(output_path, format="ogg", codec="libopus")
+    
+    # Limpa o arquivo temporário
+    if os.path.exists(temp_mp3):
+        os.remove(temp_mp3)
 
 @app.route("/falar")
 def falar():
@@ -32,19 +33,18 @@ def falar():
     velocidade = request.args.get("vel", "0")
     tom = request.args.get("tom", "0")
     
-    if not texto:
-        return "Erro: Texto vazio", 400
+    if not texto: return "Erro", 400
     
-    output_file = "audio.mp3"
+    # Agora o arquivo final é .ogg
+    output_file = "audio.ogg"
     
     try:
-        # Garantindo que o loop de eventos funcione em cada chamada
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(generate_voice(texto, output_file, velocidade, tom))
         loop.close()
         
-        return send_file(output_file, mimetype="audio/mpeg")
+        return send_file(output_file, mimetype="audio/ogg")
     except Exception as e:
         return f"Erro: {str(e)}", 500
 
