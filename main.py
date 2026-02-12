@@ -6,15 +6,19 @@ import os
 app = Flask(__name__)
 
 async def generate_voice(text, output_path, rate, pitch):
-    # Formata velocidade e tom
-    rate_str = f"{rate}%" if rate.startswith(('+', '-')) else f"+{rate}%"
-    pitch_str = f"{pitch}Hz" if pitch.startswith(('+', '-')) else f"+{pitch}Hz"
-    
-    # Se o texto já vier com as tags <speak>, usamos SSML direto
-    if "<speak" in text:
-        communicate = edge_tts.Communicate(text, "pt-BR-ThalitaNeural", rate=rate_str, pitch=pitch_str)
+    # Se houver tags de pausa, criamos o XML que o motor da voz entende
+    if "<break" in text:
+        # Monta o pacote SSML necessário para o edge-tts
+        ssml = f"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="pt-BR">
+                   <voice name="pt-BR-ThalitaNeural">
+                   <prosody rate="{rate}%" pitch="{pitch}Hz">{text}</prosody>
+                   </voice>
+                   </speak>"""
+        communicate = edge_tts.Communicate(ssml, "pt-BR-ThalitaNeural")
     else:
-        communicate = edge_tts.Communicate(text, "pt-BR-ThalitaNeural", rate=rate_str, pitch=pitch_str)
+        # Texto simples sem pausas complexas
+        rate_str = f"{rate}%" if rate.startswith(('+', '-')) else f"+{rate}%"
+        communicate = edge_tts.Communicate(text, "pt-BR-ThalitaNeural", rate=rate_str)
         
     await communicate.save(output_path)
 
@@ -22,7 +26,7 @@ async def generate_voice(text, output_path, rate, pitch):
 def falar():
     texto = request.args.get("texto")
     velocidade = request.args.get("vel", "0")
-    tom = request.args.get("tom", "0") # Novo: controla se a voz é mais aguda ou grave
+    tom = request.args.get("tom", "0")
     
     if not texto: return "Erro", 400
     
