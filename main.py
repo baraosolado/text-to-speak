@@ -6,42 +6,60 @@ from pydub import AudioSegment
 
 app = Flask(__name__)
 
-async def generate_voice(text, output_path, rate, pitch):
+async def generate_voice(text, output_path, rate, pitch, voice="pt-BR-FranciscaNeural"):
     r = f"{rate}%" if rate.startswith(('+', '-')) else f"+{rate}%"
     p = f"{pitch}Hz" if pitch.startswith(('+', '-')) else f"+{pitch}Hz"
     
-    # Substituições de pausas humanas
-    processed_text = text.replace("...", " . ").replace("..", " . ")
+    # Processamento para voz mais humana
+    processed_text = text
+    processed_text = processed_text.replace("...", "<break time='800ms'/>")
+    processed_text = processed_text.replace("..", "<break time='500ms'/>")
+    processed_text = processed_text.replace(", ", ",<break time='200ms'/> ")
+    processed_text = processed_text.replace(": ", ":<break time='300ms'/> ")
+    processed_text = processed_text.replace("; ", ";<break time='300ms'/> ")
+    processed_text = processed_text.replace("? ", "?<break time='600ms'/> ")
+    processed_text = processed_text.replace("! ", "!<break time='600ms'/> ")
+    processed_text = processed_text.replace(". ", ".<break time='400ms'/> ")
+    
+    # SSML para controle total
+    ssml_text = f"""
+    <speak version='1.0' xml:lang='pt-BR'>
+        <voice name='{voice}'>
+            <prosody rate='{r}' pitch='{p}'>
+                {processed_text}
+            </prosody>
+        </voice>
+    </speak>
+    """
     
     temp_mp3 = "temp_audio.mp3"
     
-    # 1. Gera em MP3 primeiro (padrão do edge-tts)
-    communicate = edge_tts.Communicate(processed_text, "pt-BR-ThalitaNeural", rate=r, pitch=p)
+    communicate = edge_tts.Communicate(ssml_text, voice)
     await communicate.save(temp_mp3)
     
-    # 2. Converte MP3 para OGG (Formato que o WhatsApp ama)
+    # Converte para OGG
     audio = AudioSegment.from_mp3(temp_mp3)
     audio.export(output_path, format="ogg", codec="libopus")
     
-    # Limpa o arquivo temporário
     if os.path.exists(temp_mp3):
         os.remove(temp_mp3)
 
 @app.route("/falar")
 def falar():
     texto = request.args.get("texto", "")
-    velocidade = request.args.get("vel", "0")
-    tom = request.args.get("tom", "0")
+    velocidade = request.args.get("vel", "-5")  # Padrão mais lento
+    tom = request.args.get("tom", "2")          # Padrão levemente mais agudo
+    voz = request.args.get("voz", "pt-BR-FranciscaNeural")  # Permite escolher voz
     
-    if not texto: return "Erro", 400
+    if not texto: 
+        return "Erro: Texto não fornecido", 400
     
-    # Agora o arquivo final é .ogg
     output_file = "audio.ogg"
     
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(generate_voice(texto, output_file, velocidade, tom))
+        loop.run_until_complete(generate_voice(texto, output_file, velocidade, tom, voz))
         loop.close()
         
         return send_file(output_file, mimetype="audio/ogg")
