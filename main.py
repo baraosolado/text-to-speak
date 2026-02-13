@@ -7,18 +7,20 @@ from pydub import AudioSegment
 app = Flask(__name__)
 
 async def generate_voice(text, output_path, rate, pitch):
-    voice = "pt-BR-AntonioNeural"
+    # Alterado para a Francisca (Voz clara, madura e 100% brasileira)
+    voice = "pt-BR-FranciscaNeural"
     
-    r = f"{rate}%" if rate.startswith(('+', '-')) else f"{rate}%"
-    p = f"{pitch}Hz" if pitch.startswith(('+', '-')) else f"{pitch}Hz"
+    # Formatação conforme documentação oficial do edge-tts
+    r = f"{rate}%" if rate.startswith(('+', '-')) else f"+{rate}%"
+    p = f"{pitch}Hz" if pitch.startswith(('+', '-')) else f"+{pitch}Hz"
     
-    # Removemos a linha que injetava pontos extras
-    # Agora o texto vai puro, respeitando apenas a pontuação da Tatiana
     temp_mp3 = "temp_audio.mp3"
     
+    # Gera o áudio respeitando a pontuação do prompt
     communicate = edge_tts.Communicate(text, voice, rate=r, pitch=p)
     await communicate.save(temp_mp3)
     
+    # Converte para OGG com codec OPUS (Formato de áudio do WhatsApp)
     audio = AudioSegment.from_mp3(temp_mp3)
     audio.export(output_path, format="ogg", codec="libopus")
     
@@ -28,8 +30,10 @@ async def generate_voice(text, output_path, rate, pitch):
 @app.route("/falar")
 def falar():
     texto = request.args.get("texto", "")
+    
+    # Para a Francisca, -10% de velocidade e -2Hz de tom costumam ser o "ponto doce"
     velocidade = request.args.get("vel", "-10") 
-    tom = request.args.get("tom", "-3")        
+    tom = request.args.get("tom", "-2")        
     
     if not texto:
         return "Erro: O parâmetro 'texto' é obrigatório", 400
