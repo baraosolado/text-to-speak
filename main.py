@@ -7,7 +7,7 @@ from pydub import AudioSegment
 app = Flask(__name__)
 
 async def generate_voice(text, output_path, rate, pitch):
-    voice = "pt-BR-ThalitaMultilingualNeural"
+    voice = "pt-BR-AntonioNeural"
     
     r = f"{rate}%" if rate.startswith(('+', '-')) else f"{rate}%"
     p = f"{pitch}Hz" if pitch.startswith(('+', '-')) else f"{pitch}Hz"
